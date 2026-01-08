@@ -166,11 +166,11 @@ class License(object):
 
         encoded = to_document(serialize(license_data))
 
-        signer = key.signer(
+        signer = key.sign(
+            encoded.encode('ascii'),
             padding.PKCS1v15(),
             getattr(hashes, digest)())
-        signer.update(encoded.encode('ascii'))
-        signature = base64.b64encode(signer.finalize()).decode('ascii')
+        signature = base64.b64encode(signer).decode('ascii')
 
         return License(encoded, signature, 'with'.join((digest, encryption)))
 
@@ -207,10 +207,18 @@ class License(object):
         """
         certificate = self._certificate(certificate)
 
-        verifier = self._verifier(certificate)
-        verifier.update(self.encoded.encode('ascii'))
+        public_key = certificate.public_key()
         try:
-            verifier.verify()
+            public_key.verify(
+                base64.b64decode(self.signature),
+                self.encoded.encode('ascii'),
+                padding.PKCS1v15(),
+                getattr(hashes, self._signature_digest)())
+        except TypeError:
+            public_key.verify(
+                base64.b64decode(self.signature),
+                self.encoded.encode('ascii'),
+                getattr(hashes, self._signature_digest)())
         except cryptography.exceptions.InvalidSignature as e:
             raise self.InvalidSignatureException(e)
 
